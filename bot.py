@@ -22,11 +22,11 @@ async def on_ready():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 username TEXT PRIMARY KEY,
-                email TEXT NOT NULL,
-                password TEXT NOT NULL
+                real_name TEXT NOT NULL,
             )
         ''')
         conn.commit()
+        conn.close()
 
 # Perintah !start
 @bot.command(name='start')
@@ -39,7 +39,7 @@ async def start(ctx):
 async def help_command(ctx):
     help_text = (
         "**Panduan Bot AI Edit Gambar:**\n\n"
-        "`!start` - Memulai interaksi dengan bot\n"
+        "`!register <nama asli>` - Registrasi dengan username Discord dan nama asil\n"
         "`!help` - Menampilkan bantuan ini\n"
         "`!quiz <topik>` - Gunakan ini dengan menambahkan topik apapun setelah command untuk dijadikan topik quiz\n"
         "`!edit <lampiran gambar>` - Gunakan ini dengan melampirkan gambar dan memberi deskripsi edit\n\n"
@@ -47,6 +47,21 @@ async def help_command(ctx):
     )
     async with ctx.typing():
         await ctx.send(help_text)
+
+@bot.command(name='registration')
+async def register(ctx, real_name:str):
+    if real_name == '': pass
+    username = ctx.author.name
+with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        # Temporarily empty, dunno what to add
+        cursor.execute('''
+            empty
+            )
+        ''')
+        conn.commit()
+        conn.close()
+
 
 @bot.command(name="quiz")
 async def quiz(ctx, *, topic:str="general", questions:int=5):
