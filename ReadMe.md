@@ -24,8 +24,9 @@ A feature-rich Discord bot designed for educational environments, facilitating s
     ```
 *   **Command:**
     ```
-    !set_schedule <admin_password> <schedule_data> (WARNING! Due to certain limitations on the developer's skills, the schedule provided ***MUST NOT*** include spaces aside from differentiating between the schedule itself and the secret key.)
+    !set_schedule <admin_password> <schedule_data>
     ```
+    (WARNING! Due to certain limitations on the developer's skills, the schedule provided ***MUST NOT*** include spaces aside from differentiating between the schedule itself and the secret key.)
 *   Students can also show the schedule using the command:
     ```
     !schedule
