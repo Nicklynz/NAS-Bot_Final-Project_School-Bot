@@ -23,7 +23,7 @@ class ScheduleModal(Modal, title="Set Schedule"):
         self.key = key
         self.schedule_input = TextInput(
             label="Schedule Data",
-            placeholder='Masukkan data jadwal (e.g., {"monday": ["Science", "Math"], dst...})',
+            placeholder='Enter schedule data (e.g., {"monday": ["math", "science"]})',
             style=discord.TextStyle.paragraph,
             required=True,
             max_length=1000
@@ -93,18 +93,31 @@ async def register(ctx, real_name:str):
 
 @bot.command(name="set_schedule")
 async def set_schedule(ctx, key: str):
-    modal = ScheduleModal(key)
-    await ctx.send_modal(modal)
+    # For message commands, we need to use a different approach
+    # Send a message with a button that triggers the modal
+    
+    class ScheduleView(discord.ui.View):
+        def __init__(self, key: str):
+            super().__init__()
+            self.key = key
+            
+        @discord.ui.button(label="Set Schedule", style=discord.ButtonStyle.primary)
+        async def set_schedule_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+            modal = ScheduleModal(self.key)
+            await interaction.response.send_modal(modal)
+    
+    view = ScheduleView(key)
+    await ctx.send("Click the button below to set the schedule:", view=view, ephemeral=True)
 
 @bot.command(name='schedule')
 async def schedule(ctx):
     # Build the entire schedule message first
-    schedule_message = "Jadwal minggu ini:\n\n"
+    schedule_message = "Jadwal minggu ini:\n"
     
     for days in real_schedule:
         subjects = '\n'.join([f'  {i+1}. {subject}' for i, subject in enumerate(real_schedule[days])])
         print(f'- {days}:\n{subjects}')
-        schedule_message += f'- {days}:\n{subjects}\n\n'
+        schedule_message += f'- {days}:\n{subjects}\n'
     
     # Send the complete schedule as a single ephemeral message
     await ctx.send(schedule_message, ephemeral=True)
