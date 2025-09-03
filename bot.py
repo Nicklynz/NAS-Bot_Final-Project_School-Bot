@@ -1,5 +1,6 @@
 import os, discord, PIL.Image, random, time, requests, json, base64, re, sqlite3, ast, asyncio # godD**N the amount of f****n' libraries
 from discord.ext import commands
+from discord.ui import Modal, TextInput
 from config import api_key, TOKEN, openrouter_api_key
 from google import genai
 from google.genai import types
@@ -15,6 +16,31 @@ real_schedule = None
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
+
+class ScheduleModal(Modal, title="Set Schedule"):
+    def __init__(self, key: str):
+        super().__init__()
+        self.key = key
+        self.schedule_input = TextInput(
+            label="Schedule Data",
+            placeholder='Masukkan data jadwal (e.g., {"monday": ["Science", "Math"], dst...})',
+            style=discord.TextStyle.paragraph,
+            required=True,
+            max_length=1000
+        )
+        self.add_item(self.schedule_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        global real_schedule
+        if self.key != secret_key:
+            await interaction.response.send_message("Invalid key!", ephemeral=True)
+            return
+        
+        try:
+            real_schedule = ast.literal_eval(self.schedule_input.value)
+            await interaction.response.send_message("Schedule updated successfully!", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"Error parsing schedule: {str(e)}", ephemeral=True)
 
 # Event saat bot siap
 @bot.event
@@ -66,18 +92,22 @@ async def register(ctx, real_name:str):
         conn.close()
 
 @bot.command(name="set_schedule")
-async def set_schedule(ctx, sent_schedule, key:str):
-    global real_schedule
-    if key != secret_key: pass
-    print(sent_schedule)
-    real_schedule = ast.literal_eval(sent_schedule)
+async def set_schedule(ctx, key: str):
+    modal = ScheduleModal(key)
+    await ctx.send_modal(modal)
 
 @bot.command(name='schedule')
 async def schedule(ctx):
+    # Build the entire schedule message first
+    schedule_message = "Jadwal minggu ini:\n\n"
+    
     for days in real_schedule:
         subjects = '\n'.join([f'  {i+1}. {subject}' for i, subject in enumerate(real_schedule[days])])
         print(f'- {days}:\n{subjects}')
-        await ctx.send(f'- {days}:\n{subjects}')
+        schedule_message += f'- {days}:\n{subjects}\n\n'
+    
+    # Send the complete schedule as a single ephemeral message
+    await ctx.send(schedule_message, ephemeral=True)
 
 @bot.command(name="quiz")
 async def quiz(ctx, topic:str="general", questions:int=5):
@@ -105,7 +135,7 @@ async def quiz(ctx, topic:str="general", questions:int=5):
                 "Content-Type": "application/json"
             },
             data=json.dumps({
-                "model": "tngtech/deepseek-r1t2-chimera:free",  # Anda bisa ganti dengan model lain yang tersedia
+                "model": "tngtech/deepseek-r1t2-chimera:free", 
                 "messages": [
                     {
                         "role": "user",
