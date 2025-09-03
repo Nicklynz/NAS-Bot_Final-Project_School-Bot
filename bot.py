@@ -1,4 +1,4 @@
-import os, discord, PIL.Image, random, time, requests, json, base64, re, sqlite3
+import os, discord, PIL.Image, random, time, requests, json, base64, re, sqlite3, ast
 from discord.ext import commands
 from config import api_key, TOKEN
 from google import genai
@@ -9,6 +9,9 @@ from typing import Optional
 
 # Inisialisasi bot
 DB_NAME = 'students.db'
+secret_key = 'OSHARE' # Admins should modify this variable to add a secret key for the admin commands
+global real_schedule
+real_schedule = None
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
@@ -32,7 +35,7 @@ async def on_ready():
 @bot.command(name='start')
 async def start(ctx):
     async with ctx.typing():
-        await ctx.send("Halo! Saya adalah bot AI untuk mengedit gambar. Kirim perintah `!edit` disertai gambar dan prompt editan.")
+        await ctx.send("Halo! Saya adalah bot AI")
 
 # Perintah !help
 @bot.command(name='help')
@@ -41,9 +44,7 @@ async def help_command(ctx):
         "**Panduan Bot AI Edit Gambar:**\n\n"
         "`!register <nama asli>` - Registrasi dengan username Discord dan nama asil\n"
         "`!help` - Menampilkan bantuan ini\n"
-        "`!quiz <topik>` - Gunakan ini dengan menambahkan topik apapun setelah command untuk dijadikan topik quiz\n"
-        "`!edit <lampiran gambar>` - Gunakan ini dengan melampirkan gambar dan memberi deskripsi edit\n\n"
-        "Contoh: `!edit tambahkan efek api pada pedang`"
+        "`!quiz <topik> <number of questions>` - Gunakan ini dengan menambahkan topik apapun setelah command untuk dijadikan topik quiz"
     )
     async with ctx.typing():
         await ctx.send(help_text)
@@ -52,7 +53,7 @@ async def help_command(ctx):
 async def register(ctx, real_name:str):
     if real_name == '': pass
     username = ctx.author.name
-with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
         # Temporarily empty, dunno what to add
         cursor.execute('''
@@ -62,11 +63,25 @@ with sqlite3.connect(DB_NAME) as conn:
         conn.commit()
         conn.close()
 
+@bot.command(name="set_schedule")
+async def set_schedule(ctx, sent_schedule, key:str):
+    global real_schedule
+    if key != secret_key: pass
+    print(sent_schedule)
+    real_schedule = ast.literal_eval(sent_schedule)
+
+@bot.command(name='schedule')
+async def schedule(ctx):
+    for days in real_schedule:
+        subjects = '\n'.join([f'  {i+1}. {subject}' for i, subject in enumerate(real_schedule[days])])
+        print(f'- {days}:\n{subjects}')
+        await ctx.send(f'- {days}:\n{subjects}')
 
 @bot.command(name="quiz")
-async def quiz(ctx, *, topic:str="general", questions:int=5):
+async def quiz(ctx, topic:str="general", questions:int=5):
     await ctx.send(f"🎯 Membuat kuis tentang **{topic}** dengan **{questions}** soal...")
 
+    # Broken due to my API Key getting suspended, Appealed with no answer as of now (Also possibly IP banned, I'm royally fucked)
     client = genai.Client(api_key=api_key)
 
     prompt = f"""
