@@ -51,11 +51,10 @@ async def on_ready():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS students (
                 username TEXT PRIMARY KEY,
-                real_name TEXT NOT NULL,
+                real_name TEXT NOT NULL
             )
         ''')
         conn.commit()
-        conn.close()
 
 # Perintah !start
 @bot.command(name='start')
@@ -89,7 +88,6 @@ async def register(ctx, real_name:str):
             )
         ''')
         conn.commit()
-        conn.close()
 
 @bot.command(name="set_schedule")
 async def set_schedule(ctx, key: str):
