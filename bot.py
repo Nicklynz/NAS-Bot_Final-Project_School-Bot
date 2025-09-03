@@ -1,6 +1,6 @@
-import os, discord, PIL.Image, random, time, requests, json, base64, re, sqlite3, ast
+import os, discord, PIL.Image, random, time, requests, json, base64, re, sqlite3, ast, asyncio # godD**N the amount of f****n' libraries
 from discord.ext import commands
-from config import api_key, TOKEN
+from config import api_key, TOKEN, openrouter_api_key
 from google import genai
 from google.genai import types
 from PIL import Image
@@ -23,7 +23,7 @@ async def on_ready():
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE IF NOT EXISTS students (
                 username TEXT PRIMARY KEY,
                 real_name TEXT NOT NULL,
             )
@@ -45,6 +45,8 @@ async def help_command(ctx):
         "`!register <nama asli>` - Registrasi dengan username Discord dan nama asil\n"
         "`!help` - Menampilkan bantuan ini\n"
         "`!quiz <topik> <number of questions>` - Gunakan ini dengan menambahkan topik apapun setelah command untuk dijadikan topik quiz"
+        "`!set_schedule <jadwal:json> <kunci rahasia>` - Menentukan jadwal (Pastikan tidak ada spasi untuk JSON jadwalnya)"
+        "`!schedule` - Gunakan ini untuk menampilkan jadwal harian"
     )
     async with ctx.typing():
         await ctx.send(help_text)
@@ -81,13 +83,10 @@ async def schedule(ctx):
 async def quiz(ctx, topic:str="general", questions:int=5):
     await ctx.send(f"🎯 Membuat kuis tentang **{topic}** dengan **{questions}** soal...")
 
-    # Broken due to my API Key getting suspended, Appealed with no answer as of now (Also possibly IP banned, I'm royally fucked)
-    client = genai.Client(api_key=api_key)
-
     prompt = f"""
     Buatkan {questions} soal kuis tentang {topic} dengan pilihan ganda.
     Jawaban hanya satu yang benar. Berikan dalam format JSON seperti ini:
-    [x
+    [
       {{
         "question": "Contoh soal?",
         "options": ["Pilihan A", "Pilihan B", "Pilihan C", "Pilihan D"],
@@ -95,22 +94,47 @@ async def quiz(ctx, topic:str="general", questions:int=5):
       }},
       ...
     ]
+    Hanya kembalikan JSON saja tanpa penjelasan tambahan.
     """
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[prompt],
-            config=types.GenerateContentConfig(response_modalities=['TEXT'])
+        response = requests.post(
+            url="https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {openrouter_api_key}",
+                "Content-Type": "application/json"
+            },
+            data=json.dumps({
+                "model": "tngtech/deepseek-r1t2-chimera:free",  # Anda bisa ganti dengan model lain yang tersedia
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.7,
+                "max_tokens": 128000,
+                "type": "json_object"
+            })
         )
 
-        content = response.candidates[0].content.parts[0].text
-        match = re.search(r'```json\s*\n([\s\S]+?)\n```', content)
-        if not match:
-            await ctx.send("❌ Tidak dapat menemukan blok JSON dari Gemini.")
+        # Check if request was successful
+        if response.status_code != 200:
+            await ctx.send(f"❌ Error dari API: {response.status_code} - {response.text}")
             return
 
-        quiz_data = json.loads(match.group(1).strip())
+        response_data = response.json()
+        content = response_data['choices'][0]['message']['content']
+        
+        # Extract JSON from the response (handle both with and without code blocks)
+        match = re.search(r'```json\s*\n([\s\S]+?)\n```', content)
+        if match:
+            json_content = match.group(1).strip()
+        else:
+            # If no code blocks found, try to parse the entire content as JSON
+            json_content = content.strip()
+        
+        quiz_data = json.loads(json_content)
 
         for i, q in enumerate(quiz_data):
             options = q["options"]
@@ -130,35 +154,44 @@ async def quiz(ctx, topic:str="general", questions:int=5):
                 user_choice_letter = msg.content.upper()
                 user_choice_value = option_map[user_choice_letter]
 
-                # Gemini's answer may be either a letter or the actual text
+                # Handle different answer formats
                 correct_answer = q["answer"]
                 correct_letter = None
                 correct_value = None
 
-                if correct_answer in option_map:
-                    correct_letter = correct_answer
+                # If answer is a letter (A, B, C, D)
+                if correct_answer.upper() in option_map:
+                    correct_letter = correct_answer.upper()
                     correct_value = option_map[correct_letter]
                 else:
-                    # Try to find the correct letter by matching the value
+                    # If answer is the text content, find the corresponding letter
                     for letter, value in option_map.items():
                         if value.strip().lower() == correct_answer.strip().lower():
                             correct_letter = letter
                             correct_value = value
                             break
+                    # If still not found, use the original answer
+                    if correct_letter is None:
+                        correct_letter = "?"
+                        correct_value = correct_answer
 
-                if user_choice_letter == correct_letter or user_choice_value.strip().lower() == correct_answer.strip().lower():
+                if (user_choice_letter == correct_letter or 
+                    user_choice_value.strip().lower() == correct_answer.strip().lower()):
                     await ctx.send("✅ Benar!")
                 else:
                     await ctx.send(f"❌ Salah! Jawaban benar: {correct_letter}. {correct_value}")
 
-            except Exception:
-                # Handle timeout
-                correct_letter = correct_letter if correct_letter else "?"
-                correct_value = correct_value if correct_value else correct_answer
-                await ctx.send(f"⌛ Waktu habis! Jawaban yang benar adalah: {correct_letter}. {correct_value}")
+            except asyncio.TimeoutError:
+                await ctx.send(f"⌛ Waktu habis! Jawaban yang benar adalah: {correct_letter if correct_letter else '?'}. {correct_value if correct_value else correct_answer}")
+            except Exception as e:
+                await ctx.send(f"❌ Error: {str(e)}")
 
+    except json.JSONDecodeError:
+        await ctx.send("❌ Tidak dapat memparse respons JSON dari API")
+    except KeyError as e:
+        await ctx.send(f"❌ Format respons API tidak sesuai: {str(e)}")
     except Exception as e:
-        await ctx.send(f"❌ Terjadi kesalahan saat membuat kuis: {e}")
+        await ctx.send(f"❌ Error: {str(e)}")
 
 if __name__ == "__main__":
     bot.run(TOKEN)
