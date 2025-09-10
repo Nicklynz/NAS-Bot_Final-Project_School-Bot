@@ -5,11 +5,11 @@ A feature-rich Discord bot designed for educational environments, facilitating s
 ## Features
 
 ### User Registration
-*   Students can register themselves with a unique username using the command:
+*   Students can register themselves with their real name using the command:
     ```
-    !register <username>
+    !registration <nama>
     ```
-*   Registered usernames are stored in a persistent database.
+*   Registered users are stored in a persistent database.
 
 ### Admin Schedule Management
 *   Authorized administrators can set the weekly class schedule.
